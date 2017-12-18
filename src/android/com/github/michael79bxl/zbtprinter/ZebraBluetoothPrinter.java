@@ -2,13 +2,19 @@ package com.github.michael79bxl.zbtprinter;
 
 import java.io.IOException;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Base64;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 import org.json.JSONArray;
 import org.json.JSONException;
 import android.util.Log;
 import com.zebra.android.discovery.*;
+import com.zebra.sdk.graphics.internal.ZebraImageAndroid;
 import com.zebra.sdk.comm.*;
+import com.zebra.sdk.printer.ZebraPrinter;
+import com.zebra.sdk.printer.ZebraPrinterFactory;
 import com.zebra.sdk.printer.*;
 
 public class ZebraBluetoothPrinter extends CordovaPlugin {
@@ -26,7 +32,8 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
             try {
                 String mac = args.getString(0);
                 String msg = args.getString(1);
-                sendData(callbackContext, mac, msg);
+                String height = args.getString(2);
+                sendData(callbackContext, mac, msg, height);
             } catch (Exception e) {
                 Log.e(LOG_TAG, e.getMessage());
                 e.printStackTrace();
@@ -44,7 +51,7 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
         }
         return false;
     }
-    
+
     public void findPrinter(final CallbackContext callbackContext) {
       try {
           BluetoothDiscoverer.findPrinters(this.cordova.getActivity().getApplicationContext(), new DiscoveryHandler() {
@@ -66,13 +73,13 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
           });
       } catch (Exception e) {
           e.printStackTrace();
-      }      
+      }
     }
 
     /*
      * This will send data to be printed by the bluetooth printer
      */
-    void sendData(final CallbackContext callbackContext, final String mac, final String msg) throws IOException {
+    void sendData(final CallbackContext callbackContext, final String mac, final String msg, final String height) throws IOException {
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -85,20 +92,22 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
 
                         // Open the connection - physical connection is established here.
                         thePrinterConn.open();
-
+                        ZebraPrinter printer = ZebraPrinterFactory.getInstance(thePrinterConn);
                         // Send the data to printer as a byte array.
-//                        thePrinterConn.write("^XA^FO0,20^FD^FS^XZ".getBytes());
-                        thePrinterConn.write(msg.getBytes());
-
+                        String setup = "^XA^MNN,50^LL"+height+"^XZ^XA^JUS^XZ";
+                        thePrinterConn.write(setup.getBytes());
+                        byte[] decodedString = Base64.decode(msg, Base64.DEFAULT);
+                        Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
+                        printer.printImage(new ZebraImageAndroid(decodedByte), 0, 0, 0, 0, false);
 
                         // Make sure the data got to the printer before closing the connection
                         Thread.sleep(500);
 
                         // Close the insecure connection to release resources.
                         thePrinterConn.close();
-                        callbackContext.success("Done");
+                        callbackContext.success("ok");
                     } else {
-						callbackContext.error("Printer is not ready");
+						callbackContext.error("Impresora no disponible");
 					}
                 } catch (Exception e) {
                     // Handle communications error here.
@@ -117,15 +126,14 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
         if (printerStatus.isReadyToPrint) {
             isOK = true;
         } else if (printerStatus.isPaused) {
-            throw new ConnectionException("Cannot print because the printer is paused");
+            throw new ConnectionException("No se puede imprimir, la impresora est? en pausa");
         } else if (printerStatus.isHeadOpen) {
-            throw new ConnectionException("Cannot print because the printer media door is open");
+            throw new ConnectionException("No se puede imprimir, por favor cierre la tapa de la impresora");
         } else if (printerStatus.isPaperOut) {
-            throw new ConnectionException("Cannot print because the paper is out");
+            throw new ConnectionException("No se puede imprimir, no hay papel en la impresora");
         } else {
-            throw new ConnectionException("Cannot print");
+            throw new ConnectionException("No se puede imprimir");
         }
         return isOK;
     }
 }
-
