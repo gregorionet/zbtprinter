@@ -3,10 +3,12 @@ A Cordova/Phonegap driver for Zebra bluetooth printers
 
 This is a fork of https://github.com/mmilidoni/zbtprinter with discovery
 
-##Install
+# Install
+
 cordova plugin add https://github.com/gregorionet/zbtprinter.git
 
-##Usage
+# Usage
+
 You can find Zebra printer using:
 
 ```
