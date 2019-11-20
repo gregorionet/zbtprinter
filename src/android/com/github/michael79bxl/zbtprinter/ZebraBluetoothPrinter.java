@@ -89,16 +89,41 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
 
                     // Verify the printer is ready to print
                     if (isPrinterReady(thePrinterConn)) {
-
                         // Open the connection - physical connection is established here.
-                        thePrinterConn.open();
-                        ZebraPrinter printer = ZebraPrinterFactory.getInstance(thePrinterConn);
-                        // Send the data to printer as a byte array.
-                        String setup = "^XA^MNN,50^LL"+height+"^XZ^XA^JUS^XZ";
-                        thePrinterConn.write(setup.getBytes());
+						thePrinterConn.open();
+						thePrinterConn.write("! U1 setvar \"device.languages\" \"CPCL\"\r\n".getBytes());
+						thePrinterConn.write("! U1 JOURNAL\r\n! U1 SETFF 50 2\r\n".getBytes());
+
+						// MÉTODO NUEVO
+						ZebraPrinter printer = ZebraPrinterFactory.getInstance(PrinterLanguage.CPCL, thePrinterConn);
+
+						// Send the data to printer as a byte array.
                         byte[] decodedString = Base64.decode(msg, Base64.DEFAULT);
                         Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
-                        printer.printImage(new ZebraImageAndroid(decodedByte), 0, 0, 0, 0, false);
+						ZebraImageAndroid zebraImageToPrint = new ZebraImageAndroid(decodedByte);
+
+						// MÉTODO NUEVO
+						printer.storeImage("R:TEMP.PCX", zebraImageToPrint, -1, -1);
+
+						String printString =
+						"! 0 200 200 " + height + " 1\r\n" // tamaño de la impresion y cantidad de copias
+						+ "PW 831\r\n" // ancho máximo de impresion
+						+ "TONE 60\r\n" // intensidad de la impresión 0-200
+						+ "SPEED 2\r\n" // velocidad de la impresion (menos = mas precíso) 1-2.5cm/s | 2-5cm/s | 3-7.6cm/s
+						+ "NO-PACE\r\n"
+						+ "BAR-SENSE\r\n"
+						+ "PCX 0 0 !<TEMP.PCX\r\n" // obtener la imagen que almacenamos antes en la impresora
+						+ "FORM\r\n"
+						+ "PRINT\r\n"; // imprimir
+						// envío de los comandos a la impresora, la imagen se imprimirá ahora
+						thePrinterConn.write(printString.getBytes());
+						// borramos la imagen
+						thePrinterConn.write("! U1 do \"file.delete\" \"R:TEMP.PCX\"\r\n".getBytes());
+
+						// MÉTODO ANTIGUO
+						//String setup = "^XA^MNN,50^LL"+height+"^XZ^XA^JUS^XZ";
+                        //thePrinterConn.write(setup.getBytes());
+						//printer.printImage(new ZebraImageAndroid(decodedByte), 0, 0, 0, 0, false);
 
                         // Make sure the data got to the printer before closing the connection
                         Thread.sleep(500);
@@ -118,15 +143,27 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
     }
 
     private Boolean isPrinterReady(Connection connection) throws ConnectionException, ZebraPrinterLanguageUnknownException {
-        Boolean isOK = false;
+		Boolean isOK = false;
+		ZebraPrinterLinkOs linkos_printer;
+
         connection.open();
         // Creates a ZebraPrinter object to use Zebra specific functionality like getCurrentStatus()
-        ZebraPrinter printer = ZebraPrinterFactory.getInstance(connection);
-        PrinterStatus printerStatus = printer.getCurrentStatus();
+		ZebraPrinter printer = ZebraPrinterFactory.getInstance(connection);
+
+		// MÉTODO NUEVO
+		try {
+			linkos_printer = ZebraPrinterFactory.createLinkOsPrinter(printer);
+		} catch (Exception e) {
+			linkos_printer = null;
+		}
+
+		// MÉTODO NUEVO
+        PrinterStatus printerStatus = (linkos_printer != null) ? linkos_printer.getCurrentStatus() : printer.getCurrentStatus();
+
         if (printerStatus.isReadyToPrint) {
             isOK = true;
         } else if (printerStatus.isPaused) {
-            throw new ConnectionException("No se puede imprimir, la impresora est? en pausa");
+            throw new ConnectionException("No se puede imprimir, la impresora esta en pausa");
         } else if (printerStatus.isHeadOpen) {
             throw new ConnectionException("No se puede imprimir, por favor cierre la tapa de la impresora");
         } else if (printerStatus.isPaperOut) {
@@ -134,6 +171,7 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
         } else {
             throw new ConnectionException("No se puede imprimir");
         }
+
         return isOK;
     }
 }
