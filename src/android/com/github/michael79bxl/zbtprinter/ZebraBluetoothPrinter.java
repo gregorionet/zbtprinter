@@ -94,36 +94,44 @@ public class ZebraBluetoothPrinter extends CordovaPlugin {
 						thePrinterConn.write("! U1 setvar \"device.languages\" \"CPCL\"\r\n".getBytes());
 						thePrinterConn.write("! U1 JOURNAL\r\n! U1 SETFF 50 2\r\n".getBytes());
 
-						// MÉTODO NUEVO
-						ZebraPrinter printer = ZebraPrinterFactory.getInstance(PrinterLanguage.CPCL, thePrinterConn);
+						// MÉTODO CON CPCL
+						// ZebraPrinter printer = ZebraPrinterFactory.getInstance(PrinterLanguage.CPCL, thePrinterConn);
 
 						// Send the data to printer as a byte array.
                         byte[] decodedString = Base64.decode(msg, Base64.DEFAULT);
                         Bitmap decodedByte = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.length);
 						ZebraImageAndroid zebraImageToPrint = new ZebraImageAndroid(decodedByte);
 
-						// MÉTODO NUEVO
-						printer.storeImage("R:TEMP.PCX", zebraImageToPrint, -1, -1);
+						// MÉTODO CON CPCL
+						// printer.storeImage("E:TEMP.PCX", zebraImageToPrint, -1, -1);
 
-						String printString =
+						/* String printString =
 						"! 0 200 200 " + height + " 1\r\n" // tamaño de la impresion y cantidad de copias
 						+ "PW 831\r\n" // ancho máximo de impresion
 						+ "TONE 60\r\n" // intensidad de la impresión 0-200
 						+ "SPEED 2\r\n" // velocidad de la impresion (menos = mas precíso) 1-2.5cm/s | 2-5cm/s | 3-7.6cm/s
 						+ "NO-PACE\r\n"
 						+ "BAR-SENSE\r\n"
-						+ "PCX 0 0 !<TEMP.PCX\r\n" // obtener la imagen que almacenamos antes en la impresora
+						+ "PCX 0 0 !<E:TEMP.PCX\r\n" // obtener la imagen que almacenamos antes en la impresora
 						+ "FORM\r\n"
-						+ "PRINT\r\n"; // imprimir
+						+ "PRINT\r\n"; // imprimir */
 						// envío de los comandos a la impresora, la imagen se imprimirá ahora
-						thePrinterConn.write(printString.getBytes());
-						// borramos la imagen
-						thePrinterConn.write("! U1 do \"file.delete\" \"R:TEMP.PCX\"\r\n".getBytes());
+						// thePrinterConn.write(printString.getBytes());
 
-						// MÉTODO ANTIGUO
-						//String setup = "^XA^MNN,50^LL"+height+"^XZ^XA^JUS^XZ";
-                        //thePrinterConn.write(setup.getBytes());
-						//printer.printImage(new ZebraImageAndroid(decodedByte), 0, 0, 0, 0, false);
+						// Make sure the data got to the printer before closing the connection
+                        // Thread.sleep(500);
+
+						// borramos la imagen
+						// thePrinterConn.write("! U1 do \"file.delete\" \"E:TEMP.PCX\"\r\n".getBytes());
+
+						// Usamos ZPL para la configuracion
+						ZebraPrinter printer = ZebraPrinterFactory.getInstance(PrinterLanguage.ZPL, thePrinterConn);
+						String setup = "^XA^MNN,50^LL"+height+"^XZ^XA^JUS^XZ";
+                        thePrinterConn.write(setup.getBytes());
+
+						// Usamos CPCL para imprimir
+						printer = ZebraPrinterFactory.getInstance(PrinterLanguage.CPCL, thePrinterConn);
+						printer.printImage(new ZebraImageAndroid(decodedByte), 0, 0, 0, 0, false);
 
                         // Make sure the data got to the printer before closing the connection
                         Thread.sleep(500);
